@@ -202,7 +202,7 @@ combinations$upper <- predictions$fit + 1.96 * predictions$se.fit
 combinations$level_combination <- with(combinations, 
                                        paste(Workspace, Employment, Smoking, sep = ", "))
 
-# Creating the plot
+# Creating the plot of fitted log-odds values from the final model
 ggplot(combinations, aes(x = reorder(level_combination, -log_odds), y = log_odds)) +
   geom_point(size = 3, color = "steelblue") +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "indianred") +
@@ -210,11 +210,7 @@ ggplot(combinations, aes(x = reorder(level_combination, -log_odds), y = log_odds
     x = "Workplace Dustiness, Employment Duration, Smoking Status",
     y = "Fitted Log-Odds",
     title = "Fitted Log-Odds with 95% Confidence Intervals"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels for better readability
-  )
+  ) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Conclusion
 cat("\nConclusion:\n")
