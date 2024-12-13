@@ -6,7 +6,7 @@ library(caret)
 library(glmnet)
 
 # Load the data
-byssinosis_data <- read.csv("Byssinosis.csv")
+byssinosis_data <- read.csv("/Users/Jake/Downloads/Byssinosis.csv")
 byssinosis_data <- byssinosis_data %>%
   filter(Byssinosis > 0 | Non.Byssinosis > 0)
 head(byssinosis_data)
@@ -64,7 +64,7 @@ print(data_summary_race)
 plot1 <- ggplot(byssinosis_data, aes(x = factor(Workspace), y = Byssinosis_Rate)) +
   geom_boxplot(fill = "skyblue", alpha = 0.7) +
   labs(title = "Byssinosis Rate by Workplace Dustiness",
-       x = "Workplace Dustiness (1=Most Dusty, 3=Least Dusty)",
+       x = "Workplace Dustiness (1=Most Dusty, 2=Less Dusty, 3=Least Dusty)",
        y = "Byssinosis Rate") +
   theme_minimal()
 
@@ -157,9 +157,15 @@ lasso_predictions <- predict(final_lasso_model, s = lasso_best_lambda, newx = x_
 lasso_rmse <- sqrt(mean((y_test - lasso_predictions)^2))
 cat("\nLasso RMSE: ", lasso_rmse, "\n")
 
+# Fitting final logistic regression model to full dataset
+logistic_final = glm(Byssinosis_Rate ~ factor(Workspace) + Employment + Smoking,
+                     data = byssinosis_data, 
+                     weights = Total_Workers,
+                     family = binomial(link = "logit"))
+
 # Choose stepwise_model_1 as our final model
 # Visualize odds ratios for predictors in the final model
-tidy_model <- tidy(stepwise_model_1)
+tidy_model <- tidy(logistic_final)
 
 plot2 <- tidy_model %>%
   mutate(Odds_Ratio = exp(estimate),
@@ -177,7 +183,49 @@ plot2 <- tidy_model %>%
 
 print(plot2)
 
+# Creating a dataframe with all combinations of levels in the final logistic regression model
+combinations <- expand.grid(
+  Workspace = factor(c(1, 2, 3)),
+  Employment = factor(c("<10", "10-19", ">=20")),
+  Smoking = factor(c("Yes", "No"))
+)
+
+# Generating predictions with standard errors
+predictions <- predict(logistic_final, newdata = combinations, type = "link", se.fit = TRUE)
+
+# Addding predictions and confidence intervals to the combinations data frame
+combinations$log_odds <- predictions$fit
+combinations$lower <- predictions$fit - 1.96 * predictions$se.fit
+combinations$upper <- predictions$fit + 1.96 * predictions$se.fit
+
+# Creating a new column combining factor levels for the x-axis labels
+combinations$level_combination <- with(combinations, 
+                                       paste(Workspace, Employment, Smoking, sep = ", "))
+
+# Creating the plot
+ggplot(combinations, aes(x = reorder(level_combination, -log_odds), y = log_odds)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "indianred") +
+  labs(
+    x = "Workplace Dustiness, Employment Duration, Smoking Status",
+    y = "Fitted Log-Odds",
+    title = "Fitted Log-Odds with 95% Confidence Intervals"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels for better readability
+  )
+
 # Conclusion
 cat("\nConclusion:\n")
 cat("Workplace dustiness appears to significantly contribute to the chance of byssinosis, with higher dust levels associated with increased byssinosis rates.\n")
 cat("Forward stepwise selection identified key predictors and interaction terms for byssinosis.\n")
+
+# Final Model Diagnostics
+
+# Extracting deviance residuals and fitted values
+residuals_dev <- residuals(logistic_final, type = "deviance")
+
+# Plotting residuals
+plot(residuals_dev, ylab = "Deviance Residuals", xlab = "Index", main = "Deviance Residuals")
+abline(h = 0, col = "red", lty = 2)  # Add a reference line at 0
